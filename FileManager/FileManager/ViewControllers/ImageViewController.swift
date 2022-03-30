@@ -19,7 +19,6 @@ class ImageViewController: UIViewController {
     init(imageView: UIImage) {
         super.init(nibName: nil, bundle: nil)
         self.imageView.image = imageView
-//        super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {

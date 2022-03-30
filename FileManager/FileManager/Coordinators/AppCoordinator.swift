@@ -24,18 +24,14 @@ class AppCoordinator: CoordinatorProtocol {
 
     func setTabBarController() -> UITabBarController {
         let tabBarController = UITabBarController()
-
-        let firstItem = UITabBarItem(title: "Home", image: UIImage(systemName: "house.fill"), tag: 0)
-
-
-        let firstCoordinator = FileCoordinator()
+        
+        let firstCoordinator = LoginCoordinator(window: self.window)
         firstCoordinator.parentCoordinator = self
-        firstCoordinator.openFileViewController()
+        firstCoordinator.openLoginViewController()
         let firstViewController = firstCoordinator.navigationController
-        firstViewController.tabBarItem = firstItem
-
+        
         tabBarController.viewControllers = [firstViewController]
-
+        
         return tabBarController
     }
 }

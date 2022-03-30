@@ -10,19 +10,20 @@ import PhotosUI
 
 class FileViewController: UIViewController {
     
-    private var file: File
-    private var counterForImageName = 1
-    private var counterForDefaultFolderName = 1
+    var delegate: FileViewControllerDelegate?
+    private var url: URL
+    private var files: [URL]?
+    private var alert : UIAlertController?
     
     private lazy var tableView: UITableView = {
-        let tableView = UITableView(frame: .zero, style: .plain)
+        let tableView = UITableView(frame: .zero, style: .insetGrouped)
         tableView.backgroundColor = .systemGray6
         tableView.translatesAutoresizingMaskIntoConstraints = false
         return tableView
     }()
     
-    init(data: File) {
-        self.file = data
+    init(url: URL) {
+        self.url = url
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -45,6 +46,30 @@ class FileViewController: UIViewController {
             UIBarButtonItem(image: UIImage(systemName: "folder.badge.plus"), style: .plain, target: self, action: #selector(actionOnAddFile)),
             UIBarButtonItem(image: UIImage(systemName: "photo"), style: .plain, target: self, action: #selector(actionOnAddImage))
         ]
+        
+        self.files = FileManagerApp.shared.showFile(directoryURL: self.url)
+        print("\(String(describing: files))")
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        self.refresh()
+    }
+    
+    @objc private func alertTextFieldDidChange(sender: UITextField) {
+        alert?.actions[0].isEnabled = sender.text!.count > 0
+    }
+    
+    func refresh() {
+        self.files = FileManagerApp.shared.showFile(directoryURL: self.url)
+        
+        if UserDefaults.standard.bool(forKey: "A-Z") == true ||
+            UserDefaults.standard.object(forKey: "A-Z") == nil {
+            self.files?.sort(by: { $0.lastPathComponent < $1.lastPathComponent})
+        } else {
+            self.files?.sort(by: { $1.lastPathComponent < $0.lastPathComponent})
+        }
+        self.tableView.reloadData()
     }
 }
 
@@ -67,32 +92,28 @@ extension FileViewController {
 }
 
 extension FileViewController {
-    @objc func actionOnAddFile() {
+    @objc private func actionOnAddFile() {
         var textField = UITextField()
-        let alert = UIAlertController(title: nil, message: "Enter folder name", preferredStyle: .alert)
-        alert.addTextField { alertTextField in
-            alertTextField.placeholder = "Enter text"
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        alert = UIAlertController(title: nil, message: "Enter folder name", preferredStyle: .alert)
+        
+        alert?.addTextField { alertTextField in
+            alertTextField.addTarget(self, action: #selector(self.alertTextFieldDidChange), for: .editingChanged)
             textField = alertTextField
         }
         
         let addAction = UIAlertAction(title: "Add", style: .default) { action in
-            if let text = textField.text, !text.isEmpty {
-                let newFile = FileManagerApp.shared.createFolder(nameFolder: text, mode: .document)
-                self.file.children.append(newFile)
-            } else {
-                let defaultName = "Default name\(self.counterForDefaultFolderName)"
-                self.counterForDefaultFolderName += 1
-                let newFile = FileManagerApp.shared.createFolder(nameFolder: defaultName, mode: .document)
-                self.file.children.append(newFile)
-            }
-            self.tableView.reloadData()
+            guard let text = textField.text else { return }
+            FileManagerApp.shared.createFolder(nameFolder: text, directoryURL: self.url)
+            self.refresh()
         }
+        addAction.isEnabled = false
         
         let cancelAction = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
-        
-        alert.addAction(addAction)
-        alert.addAction(cancelAction)
-        present(alert, animated: true, completion: nil)
+
+        alert!.addAction(addAction)
+        alert!.addAction(cancelAction)
+        present(alert!, animated: true, completion: nil)
     }
     
     @objc func actionOnAddImage() {
@@ -138,12 +159,11 @@ extension FileViewController {
 extension FileViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         guard let image = info[.editedImage] as? UIImage else { return }
-        let defaultName = "Image\(counterForImageName)"
-        counterForImageName += 1
-        let newFile = FileManagerApp.shared.createImage(nameImage: defaultName, mode: .image, image: image)
-        self.file.children.append(newFile)
+        guard let imageURL = info[.imageURL] as? URL else { return }
+        guard let data = image.jpegData(compressionQuality: 1) else { return }
+        FileManagerApp.shared.createImage(nameImage: imageURL.lastPathComponent, directoryURL: self.url, data: data)
+        self.refresh()
         self.dismiss(animated: true, completion: nil)
-        self.tableView.reloadData()
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
@@ -151,51 +171,57 @@ extension FileViewController: UIImagePickerControllerDelegate, UINavigationContr
     }
 }
 
-extension FileViewController: UITableViewDataSource {
+extension FileViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return file.children.count
+        return files?.count ?? 0
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell: FileTableViewCell = tableView.dequeueReusableCell(withIdentifier: "fileCellID", for: indexPath) as! FileTableViewCell
-        cell.nameFile.text = file.children[indexPath.row].name
-        cell.iconFile.image = file.children[indexPath.row].image
-        if file.children[indexPath.row].mode == .image {
+        let url = (files?[indexPath.row])!
+        
+        let data = FileManager.default.contents(atPath: url.path)
+        cell.iconFile.image = UIImage(data: data ?? Data()) ?? UIImage(systemName: "folder.fill")!
+
+        cell.nameFile.text = url.lastPathComponent
+        
+        if !url.isDirectory {
             cell.accessoryType = .none
+            if UserDefaults.standard.bool(forKey: "Show size") == true ||
+                UserDefaults.standard.object(forKey: "Show size") == nil {
+                let imageSize = (Double(data?.count ?? 0) / 1024 / 1024)
+                cell.sizeFile.text = String(format: "%.2f Mb", imageSize)
+                cell.sizeFile.isHidden = false
+            } else {
+                cell.sizeFile.isHidden = true
+            }
         } else {
             cell.accessoryType = .disclosureIndicator
+            cell.sizeFile.isHidden = true
         }
+        
         cell.selectionStyle = .none
         return cell
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        if file.children[indexPath.row].mode == .image {
-            guard let image = file.children[indexPath.row].image else { return }
-            let detailImageVC = ImageViewController(imageView: image )
-            self.navigationController?.present(detailImageVC, animated: true, completion: nil)
+        let selectedUrl = (files?[indexPath.row])!
+        if selectedUrl.isDirectory {
+            self.delegate?.openFileViewController(directoryURL: selectedUrl, title: selectedUrl.lastPathComponent)
         } else {
-            let detailFileVC = FileViewController(data: file.children[indexPath.row])
-            detailFileVC.title = detailFileVC.file.name
-            self.navigationController?.pushViewController(detailFileVC, animated: true)
+            let data = FileManager.default.contents(atPath: selectedUrl.path)
+            let image = UIImage(data: data ?? Data()) ?? UIImage(systemName: "photo.fill")!
+            self.delegate?.navigateToImageVC(imageView: image)
         }
     }
     
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        FileManagerApp.shared.deleteFile(directoryPath: file.url, filePath: file.children[indexPath.row].url)
-        
-        for (index, _) in file.children.enumerated() {
-            if indexPath.row == index {
-                file.children.remove(at: index)
-            }
-        }
-        tableView.reloadData()
+        FileManagerApp.shared.deleteFile(directoryURL: url, fileURL: (files?[indexPath.row])!)
+        self.refresh()
     }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 35
+        return 45
     }
 }
-
-extension FileViewController: UITableViewDelegate {}

@@ -17,10 +17,22 @@ class FileCoordinator: CoordinatorProtocol {
         self.navigationController = .init()
     }
     
-    func openFileViewController() {
-        guard let documentURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-        let fileViewController: FileViewController = FileViewController(data: File(name: "Documents", mode: .document, image: nil, url: documentURL.path, children: []))
-        fileViewController.navigationItem.title = "Documents"
-        self.navigationController.viewControllers = [fileViewController]
+    func openFileViewController(directoryURL: URL, title: String) {
+        let fileViewController: FileViewController = FileViewController(url: directoryURL)
+        fileViewController.delegate = self
+        fileViewController.navigationItem.title = title
+        self.navigationController.pushViewController(fileViewController, animated: true)
+    }
+}
+
+protocol FileViewControllerDelegate: AnyObject {
+    func navigateToImageVC(imageView: UIImage)
+    func openFileViewController(directoryURL: URL, title: String)
+}
+
+extension FileCoordinator: FileViewControllerDelegate {
+    func navigateToImageVC(imageView: UIImage) {
+        let imageViewController: ImageViewController = ImageViewController(imageView: imageView)
+        self.navigationController.present(imageViewController, animated: true, completion: nil)
     }
 }
