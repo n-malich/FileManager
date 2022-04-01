@@ -42,10 +42,10 @@ class SortTableViewCell: UITableViewCell {
     @objc func switchStateDidChange(sender: UISwitch) {
         if sender.isOn {
             UserDefaults.standard.set(true, forKey: "A-Z")
-            print("Включена сортировка A-Z")
+            print("Sorting on A-Z")
         } else {
             UserDefaults.standard.set(false, forKey: "A-Z")
-            print("Выключена сортировка A-Z")
+            print("Sorting off A-Z")
         }
     }
 }

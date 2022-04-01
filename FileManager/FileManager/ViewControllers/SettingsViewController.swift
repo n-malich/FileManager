@@ -94,10 +94,8 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         if indexPath.section == 1 {
-            UserDefaults.standard.removeObject(forKey: "Password")
             UserDefaults.standard.set(true, forKey: "ChangePass")
             LoginInspector.shared.removePassword()
-            
             self.delegate?.navigateToLoginVC()
         }
     }

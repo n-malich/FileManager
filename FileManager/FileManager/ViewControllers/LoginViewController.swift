@@ -7,10 +7,20 @@
 
 import UIKit
 
+enum ModeLoginScreen {
+    case signIn
+    case signUp
+    case changePass
+}
+
 class LoginViewController: UIViewController {
     
     var delegate: LoginViewControllerDelegate?
     private var alert : UIAlertController?
+    private let mode: ModeLoginScreen
+    
+    private var firstPass: String?
+    private var secondPass: String?
     
     private lazy var scrollView: UIScrollView = {
         let scrollView = UIScrollView()
@@ -46,13 +56,32 @@ class LoginViewController: UIViewController {
     
     private lazy var loginButton: CustomButton = {
         let button = CustomButton(title: nil, titleColor: .white, backgroundColor: .systemBlue, backgroundImage: nil, buttonAction: { [weak self] in
-            self?.login()
+
+            switch self?.mode {
+            case .signUp:
+                self?.signUp()
+            case .signIn:
+                self?.signIn()
+            case .changePass:
+                self?.signUp()
+            case .none:
+                break
+            }
         })
         button.alpha = 0.7
         button.layer.cornerRadius = 10
         button.clipsToBounds = true
         return button
     }()
+    
+    init(mode: ModeLoginScreen) {
+        self.mode = mode
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -62,15 +91,14 @@ class LoginViewController: UIViewController {
         setupConstraints()
         setupHideKeyboardOnTap()
         
-        if (UserDefaults.standard.object(forKey: "Password") != nil) == true {
+        switch self.mode {
+        case .signUp:
+            self.loginButton.setTitle("Create password", for: .normal)
+        case .signIn:
             self.loginButton.setTitle("Enter password", for: .normal)
-        } else {
-            self.loginButton.setTitle("Create a password", for: .normal)
-        }
-        
-        if ((UserDefaults.standard.object(forKey: "ChangePass")) != nil) == true {
-            self.isModalInPresentation = true
+        case .changePass:
             self.loginButton.setTitle("Save new password", for: .normal)
+            self.isModalInPresentation = true
         }
     }
     
@@ -105,7 +133,6 @@ class LoginViewController: UIViewController {
 
 extension LoginViewController {
         private func setupViews() {
-            
             view.addSubview(scrollView)
             scrollView.addSubview(contentView)
             [logoImageView, passwordTextField, loginButton].forEach { contentView.addSubview($0)}
@@ -148,33 +175,62 @@ extension LoginViewController {
 }
 
 extension LoginViewController {
-    private func login() {
+    @objc private func signIn() {
         guard let password = self.passwordTextField.text else { return }
-        
-        if (UserDefaults.standard.object(forKey: "Password") != nil) == true {
-                LoginInspector.shared.signIn(password: password) { result in
-                    if result {
-                        self.delegate?.navigateToMainVC()
-                    } else {
-                        self.showErrorAlert(message: "Wrong password")
-                    }
-                }
-        } else {
-            if !password.isEmpty, password.count >= 6 {
-                LoginInspector.shared.signUp(password: password) {
-                    self.delegate?.navigateToMainVC()
-                }
-            } else if !password.isEmpty, password.count < 6 {
-                self.showErrorAlert(message: "Password must be at least 6 characters")
-            } else if password.isEmpty {
-                self.showErrorAlert(message: "Enter password")
+        LoginInspector.shared.signIn(password: password) { result in
+            if result {
+                self.delegate?.navigateToMainVC()
+            } else {
+                self.showErrorAlert(message: "Wrong password")
             }
         }
-                                         
-        if ((UserDefaults.standard.object(forKey: "ChangePass")) != nil) == true {
-            self.dismiss(animated: true, completion: {
-                UserDefaults.standard.removeObject(forKey: "ChangePass")
-            })
+    }
+    
+    @objc private func signUp() {
+        guard let password = self.passwordTextField.text else { return }
+        if !password.isEmpty, password.count >= 6 {
+            let pass = UserDefaults.standard.bool(forKey: "Pass")
+            // логика первого ввода пароля
+            if pass == false {
+                firstPass = passwordTextField.text
+                DispatchQueue.main.async {
+                    self.loginButton.setTitle("Confirm password", for: .normal)
+                    self.passwordTextField.text = ""
+                    UserDefaults.standard.set(true, forKey: "Pass")
+                }
+                print("First password \(String(describing: firstPass))")
+                // логика второго ввода пароля
+            } else {
+                secondPass = passwordTextField.text
+                print("Second password \(String(describing: secondPass))")
+                if firstPass == secondPass {
+                    
+                    UserDefaults.standard.removeObject(forKey: "Pass")
+                    LoginInspector.shared.signUp(password: password) {
+                        self.delegate?.navigateToMainVC()
+                        if ((UserDefaults.standard.object(forKey: "ChangePass")) != nil) == true {
+                            self.dismiss(animated: true, completion: {
+                                UserDefaults.standard.removeObject(forKey: "ChangePass")})
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        if ((UserDefaults.standard.object(forKey: "ChangePass")) != nil) == true {
+                            self.loginButton.setTitle("Save new password", for: .normal)
+                            self.passwordTextField.text = ""
+                        } else {
+                            self.loginButton.setTitle("Create password", for: .normal)
+                            self.passwordTextField.text = ""
+                        }
+                    }
+                    UserDefaults.standard.removeObject(forKey: "Pass")
+                    self.showErrorAlert(message: "Passwords don't match")
+                }
+            }
+        } else if !password.isEmpty, password.count < 6 {
+            self.showErrorAlert(message: "Password must be at least 6 characters")
+        } else if password.isEmpty {
+            self.showErrorAlert(message: "Enter password")
         }
     }
 }
@@ -201,7 +257,7 @@ extension LoginViewController {
 }
 
 extension LoginViewController {
-    @objc private func firstNameTextFieldDidChanged() {
+    @objc private func passwordTextFieldDidChanged() {
         guard let password = passwordTextField.text else { return }
         loginButton.isEnabled = !password.isEmpty ? true : false
         isModalInPresentation = !password.isEmpty ? true : false

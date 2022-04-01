@@ -41,10 +41,10 @@ class SizeTableViewCell: UITableViewCell {
     @objc func switchStateDidChange(sender: UISwitch) {
         if sender.isOn {
             UserDefaults.standard.set(true, forKey: "Show size")
-            print("Показываю размер картинки")
+            print("Show size")
         } else {
             UserDefaults.standard.set(false, forKey: "Show size")
-            print("Размер картинки скрыт")
+            print("Hide size")
         }
     }
 }

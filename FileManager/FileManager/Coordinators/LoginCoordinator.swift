@@ -13,6 +13,7 @@ class LoginCoordinator: CoordinatorProtocol {
     let navigationController: UINavigationController
     var childCoordinators = [CoordinatorProtocol]()
     let window: UIWindow?
+    private let loginInspector = LoginInspector.shared.keychain.allKeys()
     
     required init(window: UIWindow?) {
         self.window = window
@@ -20,9 +21,15 @@ class LoginCoordinator: CoordinatorProtocol {
     }
     
     func openLoginViewController() {
-        let loginViewController: LoginViewController = LoginViewController()
-        loginViewController.delegate = self
-        self.navigationController.pushViewController(loginViewController, animated: true)
+        if loginInspector.isEmpty {
+            let loginViewController: LoginViewController = LoginViewController(mode: .signUp)
+            loginViewController.delegate = self
+            self.navigationController.pushViewController(loginViewController, animated: true)
+        } else {
+            let loginViewController: LoginViewController = LoginViewController(mode: .signIn)
+            loginViewController.delegate = self
+            self.navigationController.pushViewController(loginViewController, animated: true)
+        }
     }
     
     func setTabBarController() -> UITabBarController {
